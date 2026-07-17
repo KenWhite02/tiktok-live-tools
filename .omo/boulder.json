@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "active_work_id": null,
+  "works": {
+    "hybrid-bridge-refactor-da555169": {
+      "work_id": "hybrid-bridge-refactor-da555169",
+      "active_plan": "/home/arifzyn/tiktok-live-tools/.omo/plans/hybrid-bridge-refactor.md",
+      "plan_name": "hybrid-bridge-refactor",
+      "status": "completed",
+      "started_at": "2026-07-16T03:48:01.772Z",
+      "updated_at": "2026-07-16T10:30:00.000Z",
+      "session_ids": [],
+      "session_origins": {},
+      "agent": "atlas",
+      "task_sessions": {}
+    }
+  },
+  "active_plan": null,
+  "started_at": null,
+  "status": "completed",
+  "updated_at": "2026-07-16T10:30:00.000Z",
+  "session_ids": [],
+  "session_origins": {},
+  "plan_name": null,
+  "task_sessions": {},
+  "agent": "atlas"
+}
