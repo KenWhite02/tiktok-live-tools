@@ -5,3 +5,5 @@ data/
 .env
 *.log
 /tmp/tiktok-mpv.sock
+__pycache__/
+.venv/
