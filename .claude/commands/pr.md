@@ -43,6 +43,7 @@ Get current branch: `git rev-parse --abbrev-ref HEAD`
 - Inspect: `git --no-pager diff --cached --name-status` and `--shortstat`.
 - Write a Conventional Commit `<type>(<scope>): <subject>` (imperative, lowercase subject), e.g. `fix(queue): keep the current song when clearing the queue`.
 - `git commit -m "<message>"`.
+- **No AI attribution:** never add `Co-Authored-By: Claude …` or any other Claude/AI trailer to the commit message.
 
 ## Step 4 — Push and create/update PR
 
@@ -118,7 +119,7 @@ Write the body to the fixed temp path `/tmp/tiktok-live-tools-pr-body.md` (outsi
 - New settings in `.env.example` or `bridge/.env.example` → call them out in **Breaking Changes** so they get copied into the real `.env` files.
 - **Omit any empty subsection** so the PR body stays clean.
 
-Rules: commit messages are the source of truth; keep it reviewer-focused (what / why / how tested).
+Rules: commit messages are the source of truth; keep it reviewer-focused (what / why / how tested). **No AI attribution:** never add a `🤖 Generated with [Claude Code]…` footer or any other Claude/AI credit to the body, and ignore `Co-Authored-By` trailers from the commit log.
 
 ### Step 4d — Create or update the PR
 
