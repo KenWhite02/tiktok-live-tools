@@ -50,23 +50,21 @@ export class QueueService extends EventEmitter {
     return item;
   }
 
-  /** Mark current item as finished and return next */
-  completeCurrent(): QueueItem | null {
+  /** Mark current item as finished. The caller dequeues the next item when it starts playing. */
+  completeCurrent(): void {
     if (this.currentItem) {
       this.currentItem.status = 'finished';
       this.currentItem = null;
     }
-    return this.dequeue();
   }
 
-  /** Skip the current song (moderator only) */
-  skipCurrent(): QueueItem | null {
+  /** Skip the current song (moderator only). The caller dequeues the next item when it starts playing. */
+  skipCurrent(): void {
     if (this.currentItem) {
       this.currentItem.status = 'skipped';
       this.currentItem = null;
     }
     getLogger().info('Current song skipped');
-    return this.dequeue();
   }
 
   /** Get the currently playing item */
@@ -89,13 +87,12 @@ export class QueueService extends EventEmitter {
     return this.queue.length === 0;
   }
 
-  /** Clear the entire queue */
+  /**
+   * Remove all upcoming songs. The current song keeps playing (and stays
+   * tracked), otherwise the next request would cut it off.
+   */
   clear(): void {
     this.queue = [];
-    if (this.currentItem) {
-      this.currentItem.status = 'skipped';
-      this.currentItem = null;
-    }
     getLogger().info('Queue cleared');
     this.emit('queue-updated', this.getQueueSnapshot());
   }
@@ -134,7 +131,7 @@ export class QueueService extends EventEmitter {
 
   /** Format queue for display */
   formatQueue(): string {
-    if (this.isEmpty()) {
+    if (this.isEmpty() && !this.currentItem) {
       return '📋 Queue is empty. Use !play <song> to add music!';
     }
 
@@ -162,6 +159,10 @@ export class QueueService extends EventEmitter {
 
     if (this.queue.length > 10) {
       lines.push(`  ... and ${this.queue.length - 10} more`);
+    }
+
+    if (this.isEmpty()) {
+      lines.push('  Nothing up next. Use !play <song> to add music!');
     }
 
     return lines.join('\n');

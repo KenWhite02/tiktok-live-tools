@@ -10,6 +10,7 @@ export const stopCommand: CommandHandler = {
   async execute() {
     QueueService.clear();
     await PlayerService.stop();
+    QueueService.skipCurrent();
     return '⏹️ Playback stopped and queue cleared.';
   },
 };

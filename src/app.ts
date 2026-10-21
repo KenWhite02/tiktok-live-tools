@@ -160,6 +160,8 @@ export async function startBot(): Promise<void> {
   /** Play the next song in the queue */
   async function playNext(): Promise<void> {
     if (isShuttingDown) return;
+    // A song ending and a new request can both trigger this; only start one song
+    if (queue.getCurrent()) return;
 
     const next = queue.dequeue();
     if (!next) {

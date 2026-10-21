@@ -33,6 +33,8 @@ export class PlayerService extends EventEmitter {
 
   /** Track if a song is currently being loaded (async operation in progress) */
   private isLoadingSong = false;
+  /** mpv playlist entry of the current song, to tell its end-file apart from a replaced song's */
+  private currentEntryId: number | null = null;
   constructor(config: AppConfig) {
     super();
     this.config = config;
@@ -191,7 +193,17 @@ export class PlayerService extends EventEmitter {
           this.handlePropertyChange(event.name as string, event.data);
           break;
         case 'end-file':
-          logger.debug('Song ended');
+          // Loading a song over another one ends the old entry; that isn't
+          // the current song ending
+          if (event.playlist_entry_id !== this.currentEntryId) {
+            logger.debug({ entryId: event.playlist_entry_id }, 'Ignoring end of replaced song');
+            break;
+          }
+          if (event.reason === 'error') {
+            logger.warn({ fileError: event.file_error, title: this.currentSong?.title }, 'mpv failed to play song');
+          } else {
+            logger.debug({ reason: event.reason }, 'Song ended');
+          }
           this.currentSong = null;
           this.isLoadingSong = false;
           this.emit('song-ended');
@@ -268,7 +280,12 @@ export class PlayerService extends EventEmitter {
 
     try {
       this.isLoadingSong = true;
-      await this.rawCommand('loadfile', audioUrl, 'replace');
+      // Until mpv replies, any end-file belongs to the song being replaced
+      this.currentEntryId = null;
+      const result = (await this.rawCommand('loadfile', audioUrl, 'replace')) as
+        | { playlist_entry_id?: number }
+        | undefined;
+      this.currentEntryId = result?.playlist_entry_id ?? null;
       this.emit('song-start', song);
     } catch (error) {
       this.isLoadingSong = false;
@@ -394,6 +411,7 @@ export class PlayerService extends EventEmitter {
     this.mpvProcess = null;
     this.socket = null;
     this.currentSong = null;
+    this.currentEntryId = null;
     this.emit('player-crashed');
   }
 

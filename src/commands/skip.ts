@@ -14,11 +14,11 @@ export const skipCommand: CommandHandler = {
       return '❌ No song is currently playing.';
     }
 
-    // Stop current song in player
+    // Stopping mpv fires end-file, which starts the next song
     await PlayerService.stop();
+    QueueService.skipCurrent();
 
-    // Get next song
-    const next = QueueService.skipCurrent();
+    const next = QueueService.peek();
 
     if (next) {
       return `⏭️ Skipped! Now playing: **${next.song.title}**`;
