@@ -102,7 +102,17 @@ pip install -r requirements.txt
 cd ..
 ```
 
-### Running the Bridge
+### Running the Bot (one command)
+
+```bash
+./start.sh
+```
+
+This checks prerequisites, installs dependencies on first run, starts the
+Node.js app and the Python bridge, and stops everything (including mpv) on
+Ctrl+C. The bridge reconnects automatically if the Node.js app restarts.
+
+### Running the Bridge Manually
 
 The bridge and Node.js app run as two separate processes. Start Node.js first,
 then the Python bridge.

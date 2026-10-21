@@ -47,13 +47,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger("tiktok-bridge")
 
+# Backoff bounds (seconds) for reconnecting to the Node.js WebSocket server
+RECONNECT_MIN_DELAY = 1
+RECONNECT_MAX_DELAY = 10
+
 
 # ---------------------------------------------------------------------------
 # Payload builders
 # ---------------------------------------------------------------------------
 
-def _chat_payload(event: CommentEvent) -> dict[str, Any]:
-    user = event.user_info
+def _chat_payload(event: CommentEvent, host_username: str) -> dict[str, Any]:
+    user = event.user
+    # The stream owner has no moderator badge, so match them by username
+    is_host = (user.username or "").lower() == host_username.lstrip("@").lower()
     return {
         "type": "chat",
         "userId": str(user.id),
@@ -61,6 +67,7 @@ def _chat_payload(event: CommentEvent) -> dict[str, Any]:
         "nickname": user.nick_name,
         "message": event.comment,
         "userRole": user.user_role,
+        "isModerator": is_host or user.is_moderator,
     }
 
 
@@ -137,21 +144,21 @@ class TikTokBridge:
         )
 
         # Register event handlers with event classes (not string names)
-        self.client.on(CommentEvent, self._on_comment)
-        self.client.on(GiftEvent, self._on_gift)
-        self.client.on(LikeEvent, self._on_like)
-        self.client.on(FollowEvent, self._on_follow)
-        self.client.on(ShareEvent, self._on_share)
-        self.client.on(JoinEvent, self._on_join)
-        self.client.on(ConnectEvent, self._on_connect)
-        self.client.on(DisconnectEvent, self._on_disconnect)
+        self.client.add_listener(CommentEvent, self._on_comment)
+        self.client.add_listener(GiftEvent, self._on_gift)
+        self.client.add_listener(LikeEvent, self._on_like)
+        self.client.add_listener(FollowEvent, self._on_follow)
+        self.client.add_listener(ShareEvent, self._on_share)
+        self.client.add_listener(JoinEvent, self._on_join)
+        self.client.add_listener(ConnectEvent, self._on_connect)
+        self.client.add_listener(DisconnectEvent, self._on_disconnect)
 
     # ------------------------------------------------------------------
     # Event handlers
     # ------------------------------------------------------------------
 
     async def _on_comment(self, event: CommentEvent) -> None:
-        await self._send(_chat_payload(event))
+        await self._send(_chat_payload(event, self.config.tikTokUsername))
 
     async def _on_gift(self, event: GiftEvent) -> None:
         await self._send(_gift_payload(event))
@@ -187,62 +194,71 @@ class TikTokBridge:
         try:
             await self.websocket.send(json.dumps(payload))
         except websockets.ConnectionClosed:
-            self.websocket = None
+            # The connection loop notices the close and reconnects
             logger.warning("WebSocket connection lost (send failed)")
         except Exception:
             logger.exception("Error sending message over WebSocket")
 
     # ------------------------------------------------------------------
-    # Heartbeat
+    # Connection keeper (reconnect + heartbeat)
     # ------------------------------------------------------------------
 
-    async def _heartbeat_loop(self) -> None:
-        """Send a heartbeat message every 10 seconds."""
+    async def _connection_loop(self) -> None:
+        """Keep the Node.js WebSocket connected, sending a heartbeat every 10 seconds.
+
+        Reconnects with backoff whenever the connection drops (e.g. the Node.js
+        app restarts). Events received while disconnected are dropped.
+        """
+        delay = RECONNECT_MIN_DELAY
         while self._running:
+            if self.websocket is None:
+                try:
+                    self.websocket = await asyncio.wait_for(
+                        websockets.connect(self.ws_url), timeout=10
+                    )
+                    logger.info("Connected to WebSocket server")
+                    delay = RECONNECT_MIN_DELAY
+                except Exception as exc:
+                    # Log once per outage, not on every retry
+                    if delay == RECONNECT_MIN_DELAY:
+                        logger.warning(
+                            "WebSocket server at %s unavailable (%s). "
+                            "Retrying until the Node.js app is up...",
+                            self.ws_url,
+                            exc.__class__.__name__,
+                        )
+                    await asyncio.sleep(delay)
+                    delay = min(delay * 2, RECONNECT_MAX_DELAY)
+                    continue
+
+            ws = self.websocket
             try:
-                if self.websocket is not None:
-                    await self.websocket.send(json.dumps({"type": "heartbeat"}))
+                await ws.send(json.dumps({"type": "heartbeat"}))
+                # Returns early if the connection closes, so drops are noticed at once
+                await asyncio.wait_for(ws.wait_closed(), timeout=10)
+            except asyncio.TimeoutError:
+                continue  # Still open — time for the next heartbeat
             except websockets.ConnectionClosed:
-                self.websocket = None
-                logger.warning("WebSocket connection lost (heartbeat)")
+                pass
             except Exception:
                 logger.exception("Error sending heartbeat")
-            await asyncio.sleep(10)
+
+            if self.websocket is ws:
+                self.websocket = None
+            logger.warning("WebSocket connection lost, reconnecting...")
 
     # ------------------------------------------------------------------
     # Run
     # ------------------------------------------------------------------
 
     async def run(self) -> None:
-        """Connect to the Node.js WebSocket server and start TikTok client."""
+        """Keep the Node.js WebSocket connected and run the TikTok client."""
         self._running = True
 
-        # Connect to Node.js WebSocket server
         logger.info("Starting TikTokLive bridge")
         logger.info("Connecting to WebSocket server at %s", self.ws_url)
 
-        try:
-            self.websocket = await asyncio.wait_for(
-                websockets.connect(self.ws_url), timeout=10
-            )
-            logger.info("Connected to WebSocket server")
-        except asyncio.TimeoutError:
-            logger.error(
-                "Connection to WebSocket server timed out. Is the Node.js app running?"
-            )
-        except ConnectionRefusedError:
-            logger.error(
-                "Connection refused by WebSocket server at %s. "
-                "Make sure the Node.js app is running first.",
-                self.ws_url,
-            )
-        except Exception:
-            logger.exception("Failed to connect to WebSocket server")
-            self._running = False
-            return
-
-        # Start heartbeat
-        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        self._heartbeat_task = asyncio.create_task(self._connection_loop())
 
         # start() returns a Task — must await it to keep the WS alive
         logger.info(

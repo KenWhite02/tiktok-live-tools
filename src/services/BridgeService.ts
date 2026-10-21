@@ -269,7 +269,7 @@ export class BridgeService extends EventEmitter {
           uniqueId: String(msg.uniqueId ?? ''),
           nickname: String(msg.nickname ?? ''),
           comment: String(msg.message ?? ''),
-          isModerator: Number(msg.userRole ?? 0) >= 3,
+          isModerator: msg.isModerator === true || Number(msg.userRole ?? 0) >= 3,
           timestamp: new Date(),
         });
         break;
