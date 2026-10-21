@@ -286,7 +286,9 @@ class TikTokBridge:
             "Connecting to TikTok Live as @%s", self.config.tikTokUsername
         )
         try:
-            ws_task = await self.client.start()
+            # Skip the recent chat TikTok sends on join, so old !play
+            # requests aren't replayed when the bot restarts
+            ws_task = await self.client.start(process_connect_events=False)
             await ws_task
         except Exception:
             logger.exception("TikTokLive client encountered an error")
