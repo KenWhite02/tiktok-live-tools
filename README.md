@@ -32,6 +32,19 @@ A production-ready Node.js bot that reads TikTok Live chat, processes `!play` co
 | `!volume <0-100>` | Set player volume | 👑 Host |
 | `!clear` | Clear the entire queue | ✅ |
 
+## Stream Overlay
+
+The bot can't post in TikTok chat, so replies to `!play`, `!queue`, `!help`, etc.
+appear on a stream overlay instead (and in the terminal). While the bot is running,
+add this page as a browser/link source in TikTok LIVE Studio or OBS:
+
+```
+http://127.0.0.1:9091/
+```
+
+It shows the current song with progress, the next 5 songs, and each bot reply for
+20 seconds. The background is transparent. Change the port with `OVERLAY_PORT` in `.env`.
+
 ## Prerequisites
 
 - **Node.js** 22+

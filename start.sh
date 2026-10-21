@@ -121,6 +121,8 @@ info "Starting Python bridge for @$TIKTOK_USERNAME..."
 (cd "$BRIDGE_DIR" && exec "$VENV_DIR/bin/python" -u server.py) &
 BRIDGE_PID=$!
 
+OVERLAY_PORT="${OVERLAY_PORT:-$(env_value "$ROOT_DIR/.env" OVERLAY_PORT)}"
+info "Stream overlay: http://127.0.0.1:${OVERLAY_PORT:-9091}/ (add as a browser source)"
 info "Bot running — press Ctrl+C to stop"
 
 # Exit (and clean up) as soon as either process stops

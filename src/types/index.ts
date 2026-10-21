@@ -55,6 +55,7 @@ export interface CommandHandler {
 export interface AppConfig {
   wsHost: string;
   wsPort: number;
+  overlayPort: number;
   mpvPath: string;
   ytDlpPath: string;
   cooldown: number;

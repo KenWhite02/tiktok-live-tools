@@ -21,6 +21,7 @@ export function loadConfig(): AppConfig {
   return {
     wsHost: optionalEnv('WS_HOST', '127.0.0.1'),
     wsPort: numericEnv('WS_PORT', 9090),
+    overlayPort: numericEnv('OVERLAY_PORT', 9091),
     mpvPath: optionalEnv('MPV_PATH', 'mpv'),
     ytDlpPath: optionalEnv('YTDLP_PATH', 'yt-dlp'),
     cooldown: numericEnv('COOLDOWN', 120),

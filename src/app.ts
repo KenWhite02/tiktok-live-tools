@@ -9,6 +9,7 @@ import {
   PlayerService,
   QueueService,
   TikTokService,
+  OverlayService,
 } from './services/index.js';
 import {
   setBridgeService,
@@ -45,6 +46,7 @@ export async function startBot(): Promise<void> {
   const queue = new QueueService(config);
   const bridge = new BridgeService(config.wsHost, config.wsPort);
   const tiktok = new TikTokService(bridge);
+  const overlay = new OverlayService(config, player, queue);
 
   // Store in container for command handlers
   setBridgeService(bridge);
@@ -86,6 +88,7 @@ export async function startBot(): Promise<void> {
       if (data.comment.trim().startsWith('!play') || data.comment.trim().startsWith('!p ')) {
         console.log(`\n📢 @${data.uniqueId}: ${data.comment}`);
         console.log(`🤖 ⏳ Cooldown: ${remaining}s remaining\n`);
+        overlay.addReply(data.nickname, `⏳ Cooldown: ${remaining}s remaining`);
         return;
       }
     }
@@ -102,6 +105,8 @@ export async function startBot(): Promise<void> {
       // Log response to console (TikTok can't receive chat back without auth)
       console.log(`\n📢 @${data.uniqueId}: ${data.comment}`);
       console.log(`🤖 ${response}\n`);
+      // Viewers see replies on the stream overlay
+      overlay.addReply(data.nickname, response);
     }
   });
 
@@ -247,11 +252,12 @@ export async function startBot(): Promise<void> {
 
   // Start the WebSocket bridge server and subscribe to events
   bridge.start();
+  overlay.start();
   await tiktok.connect();
 
   // ─── Graceful Shutdown ────────────────────────────────────────────────────
-  process.on('SIGINT', () => handleShutdown(bridge, player, tiktok, db, logger));
-  process.on('SIGTERM', () => handleShutdown(bridge, player, tiktok, db, logger));
+  process.on('SIGINT', () => handleShutdown(bridge, player, tiktok, db, overlay, logger));
+  process.on('SIGTERM', () => handleShutdown(bridge, player, tiktok, db, overlay, logger));
   process.on('uncaughtException', (error) => {
     logger.error({ error }, 'Uncaught exception');
   });
@@ -289,6 +295,7 @@ export async function handleShutdown(
   player: PlayerService,
   tiktok: TikTokService,
   db: DatabaseService,
+  overlay: OverlayService,
   logger: ReturnType<typeof getLogger>,
 ): Promise<void> {
   if (isShuttingDown) return;
@@ -298,6 +305,7 @@ export async function handleShutdown(
 
   try {
     bridge.stop();
+    overlay.stop();
     await player.shutdown();
     await tiktok.disconnect();
     db.close();
