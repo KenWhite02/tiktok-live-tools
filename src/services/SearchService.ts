@@ -35,36 +35,53 @@ export class SearchService {
 
   /**
    * Search for a song by query string.
-   * Returns the best matching result.
+   * Prefers lyric videos, since official music videos often have long
+   * intros or skits where the song isn't playing.
    */
   async search(query: string): Promise<Song | null> {
     const logger = getLogger();
     logger.info({ query }, 'Searching for song');
 
+    const lyricQuery = /lyric/i.test(query) ? query : `${query} lyrics`;
+    const results = await this.searchResults(lyricQuery);
+    const valid = results
+      .map((info) => this.validateAndCreateSong(info))
+      .filter((song): song is Song => song !== null);
+
+    const lyricSong = valid.find((song) => /lyric/i.test(song.title));
+    if (lyricSong) return lyricSong;
+    if (valid.length > 0) return valid[0];
+
+    // No usable lyric results — fall back to the plain query
+    if (lyricQuery !== query) {
+      for (const info of await this.searchResults(query)) {
+        const song = this.validateAndCreateSong(info);
+        if (song) return song;
+      }
+    }
+
+    logger.warn({ query }, 'No valid search results found');
+    return null;
+  }
+
+  /** Run a YouTube search and return the top results' metadata */
+  private async searchResults(query: string, count = 5): Promise<YtDlpVideoInfo[]> {
     try {
-      const searchQuery = `ytsearch:${query}`;
       const { stdout } = await execFileAsync(this.ytDlpPath, [
-        searchQuery,
+        `ytsearch${count}:${query}`,
         '--dump-json',
-        '--default-search',
-        'ytsearch',
         '--no-playlist',
         '--flat-playlist',
-        '--limit',
-        '1',
       ]);
 
-      const lines = stdout.trim().split('\n').filter(Boolean);
-      if (lines.length === 0) {
-        logger.warn({ query }, 'No search results found');
-        return null;
-      }
-
-      const info: YtDlpVideoInfo = JSON.parse(lines[0]);
-      return this.validateAndCreateSong(info);
+      return stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as YtDlpVideoInfo);
     } catch (error) {
-      logger.error({ error, query }, 'Search failed');
-      return null;
+      getLogger().error({ error, query }, 'Search failed');
+      return [];
     }
   }
 

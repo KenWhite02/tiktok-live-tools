@@ -12,6 +12,7 @@ export interface BridgeChatPayload {
   nickname: string;
   comment: string;
   isModerator: boolean;
+  isHost: boolean;
   timestamp: Date;
 }
 
@@ -269,7 +270,8 @@ export class BridgeService extends EventEmitter {
           uniqueId: String(msg.uniqueId ?? ''),
           nickname: String(msg.nickname ?? ''),
           comment: String(msg.message ?? ''),
-          isModerator: Number(msg.userRole ?? 0) >= 3,
+          isModerator: msg.isModerator === true,
+          isHost: msg.isHost === true,
           timestamp: new Date(),
         });
         break;

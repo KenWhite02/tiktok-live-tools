@@ -4,9 +4,10 @@ import { PlayerService } from '../container.js';
 export const volumeCommand: CommandHandler = {
   name: 'volume',
   aliases: ['vol', 'v'],
-  description: 'Set the player volume (0-100). Moderator only.',
+  description: 'Set the player volume (0-100). Host only.',
   usage: '!volume <0-100>',
   moderatorOnly: true,
+  hostOnly: true,
   async execute(ctx) {
 
     if (ctx.args.length === 0) {

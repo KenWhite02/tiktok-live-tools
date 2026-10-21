@@ -16,9 +16,10 @@ export const helpCommand: CommandHandler = {
     ];
 
     for (const cmd of commands) {
+      if (cmd.hostOnly && !ctx.isHost) continue;
       if (cmd.moderatorOnly && !ctx.isModerator) continue;
 
-      const prefix = cmd.moderatorOnly ? '🔒 (Mod) ' : '';
+      const prefix = cmd.hostOnly ? '🔒 (Host) ' : cmd.moderatorOnly ? '🔒 (Mod) ' : '';
       const aliases = cmd.aliases.length > 0 ? ` [${cmd.aliases.map((a) => '!' + a).join(', ')}]` : '';
       lines.push(`  ${prefix}**!${cmd.name}**${aliases} — ${cmd.description}`);
     }

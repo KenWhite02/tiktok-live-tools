@@ -28,9 +28,22 @@ A production-ready Node.js bot that reads TikTok Live chat, processes `!play` co
 | `!skip` | Skip the current song | ✅ |
 | `!pause` | Pause playback | ✅ |
 | `!resume` | Resume playback | ✅ |
-| `!stop` | Stop playback and clear the queue | ✅ |
-| `!volume <0-100>` | Set player volume | ✅ |
+| `!stop` | Stop playback and clear the queue | 👑 Host |
+| `!volume <0-100>` | Set player volume | 👑 Host |
 | `!clear` | Clear the entire queue | ✅ |
+
+## Stream Overlay
+
+The bot can't post in TikTok chat, so replies to `!play`, `!queue`, `!help`, etc.
+appear on a stream overlay instead (and in the terminal). While the bot is running,
+add this page as a browser/link source in TikTok LIVE Studio or OBS:
+
+```
+http://127.0.0.1:9091/
+```
+
+It shows the current song with progress, the next 5 songs, and each bot reply for
+20 seconds. The background is transparent. Change the port with `OVERLAY_PORT` in `.env`.
 
 ## Prerequisites
 
@@ -102,7 +115,17 @@ pip install -r requirements.txt
 cd ..
 ```
 
-### Running the Bridge
+### Running the Bot (one command)
+
+```bash
+./start.sh
+```
+
+This checks prerequisites, installs dependencies on first run, starts the
+Node.js app and the Python bridge, and stops everything (including mpv) on
+Ctrl+C. The bridge reconnects automatically if the Node.js app restarts.
+
+### Running the Bridge Manually
 
 The bridge and Node.js app run as two separate processes. Start Node.js first,
 then the Python bridge.

@@ -33,6 +33,8 @@ export interface CommandContext {
   uniqueId: string;
   nickname: string;
   isModerator: boolean;
+  /** The stream owner (TIKTOK_USERNAME in bridge/.env) */
+  isHost: boolean;
   args: string[];
   message: string;
 }
@@ -44,6 +46,8 @@ export interface CommandHandler {
   description: string;
   usage: string;
   moderatorOnly: boolean;
+  /** Only the stream owner may run this command, not even moderators */
+  hostOnly?: boolean;
   execute: (ctx: CommandContext) => Promise<string | void>;
 }
 
@@ -51,6 +55,7 @@ export interface CommandHandler {
 export interface AppConfig {
   wsHost: string;
   wsPort: number;
+  overlayPort: number;
   mpvPath: string;
   ytDlpPath: string;
   cooldown: number;
