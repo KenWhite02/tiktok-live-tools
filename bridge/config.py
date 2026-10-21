@@ -9,6 +9,12 @@ def _env_str(key: str, default: str) -> str:
     return os.environ.get(key, default).strip()
 
 
+def _env_usernames(key: str) -> set[str]:
+    """Comma-separated TikTok usernames, lowercased and without a leading @."""
+    raw = os.environ.get(key, "")
+    return {name.strip().lstrip("@").lower() for name in raw.split(",") if name.strip()}
+
+
 def _env_int(key: str, default: int) -> int:
     try:
         return int(os.environ.get(key, str(default)).strip())
@@ -20,6 +26,10 @@ def _env_int(key: str, default: int) -> int:
 class BridgeConfig:
     tikTokUsername: str = field(
         default_factory=lambda: _env_str("TIKTOK_USERNAME", "")
+    )
+    # Extra accounts that get the same host-only command rights as the stream owner
+    hostUsernames: set[str] = field(
+        default_factory=lambda: _env_usernames("HOST_USERNAMES")
     )
     wsHost: str = field(default_factory=lambda: _env_str("WS_HOST", "127.0.0.1"))
     wsPort: int = field(default_factory=lambda: _env_int("WS_PORT", 9090))

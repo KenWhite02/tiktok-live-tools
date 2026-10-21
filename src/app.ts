@@ -69,6 +69,7 @@ export async function startBot(): Promise<void> {
     nickname: string;
     comment: string;
     isModerator: boolean;
+    isHost: boolean;
   }) => {
     logger.debug(
       { user: data.uniqueId, comment: data.comment },
@@ -94,6 +95,7 @@ export async function startBot(): Promise<void> {
       uniqueId: data.uniqueId,
       nickname: data.nickname,
       isModerator: data.isModerator,
+      isHost: data.isHost,
     });
 
     if (response) {

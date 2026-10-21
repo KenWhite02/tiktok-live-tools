@@ -58,6 +58,10 @@ export async function executeCommand(
     return;
   }
 
+  if (command.hostOnly && !ctx.isHost) {
+    return '❌ This command is for the host only.';
+  }
+
   // Check moderator-only commands
   if (command.moderatorOnly && !ctx.isModerator) {
     return '❌ This command is for moderators only.';

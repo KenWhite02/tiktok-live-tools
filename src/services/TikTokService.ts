@@ -71,6 +71,7 @@ export class TikTokService extends EventEmitter {
         nickname?: string;
         comment?: string;
         isModerator?: boolean;
+        isHost?: boolean;
         timestamp?: Date;
       };
       this.emit('chat', {
@@ -79,6 +80,7 @@ export class TikTokService extends EventEmitter {
         nickname: d.nickname ?? 'unknown',
         comment: d.comment ?? '',
         isModerator: d.isModerator ?? false,
+        isHost: d.isHost ?? false,
         timestamp: d.timestamp ?? new Date(),
       });
     };

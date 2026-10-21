@@ -56,10 +56,24 @@ RECONNECT_MAX_DELAY = 10
 # Payload builders
 # ---------------------------------------------------------------------------
 
-def _chat_payload(event: CommentEvent, host_username: str) -> dict[str, Any]:
+def _chat_payload(event: CommentEvent, host_usernames: set[str]) -> dict[str, Any]:
     user = event.user
-    # The stream owner has no moderator badge, so match them by username
-    is_host = (user.username or "").lower() == host_username.lstrip("@").lower()
+    username = (user.username or "").lower()
+    # The stream owner has no moderator badge, so match them by username.
+    # Host-only commands (!volume, !stop) also allow HOST_USERNAMES.
+    is_host = username in host_usernames
+    # TikTok calls moderators "admins"; the badge check is a fallback.
+    # HOST_USERNAMES outrank moderators, so they get moderator commands too.
+    attr = user.user_attr
+    is_moderator = (
+        is_host
+        or bool(attr and (attr.is_admin or attr.is_super_admin))
+        or user.is_moderator
+    )
+    if event.comment.strip().startswith("!"):
+        logger.info(
+            "Command from @%s: moderator=%s host=%s", user.username, is_moderator, is_host
+        )
     return {
         "type": "chat",
         "userId": str(user.id),
@@ -67,7 +81,8 @@ def _chat_payload(event: CommentEvent, host_username: str) -> dict[str, Any]:
         "nickname": user.nick_name,
         "message": event.comment,
         "userRole": user.user_role,
-        "isModerator": is_host or user.is_moderator,
+        "isModerator": is_moderator,
+        "isHost": is_host,
     }
 
 
@@ -133,6 +148,10 @@ class TikTokBridge:
     def __init__(self, config: BridgeConfig) -> None:
         self.config = config
         self.ws_url = f"ws://{config.wsHost}:{config.wsPort}"
+        self.host_usernames = {
+            config.tikTokUsername.lstrip("@").lower(),
+            *config.hostUsernames,
+        }
         self.websocket: websockets.WebSocketClientProtocol | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._running = False
@@ -158,7 +177,9 @@ class TikTokBridge:
     # ------------------------------------------------------------------
 
     async def _on_comment(self, event: CommentEvent) -> None:
-        await self._send(_chat_payload(event, self.config.tikTokUsername))
+        await self._send(
+            _chat_payload(event, self.host_usernames)
+        )
 
     async def _on_gift(self, event: GiftEvent) -> None:
         await self._send(_gift_payload(event))

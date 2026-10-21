@@ -28,8 +28,8 @@ A production-ready Node.js bot that reads TikTok Live chat, processes `!play` co
 | `!skip` | Skip the current song | ✅ |
 | `!pause` | Pause playback | ✅ |
 | `!resume` | Resume playback | ✅ |
-| `!stop` | Stop playback and clear the queue | ✅ |
-| `!volume <0-100>` | Set player volume | ✅ |
+| `!stop` | Stop playback and clear the queue | 👑 Host |
+| `!volume <0-100>` | Set player volume | 👑 Host |
 | `!clear` | Clear the entire queue | ✅ |
 
 ## Prerequisites
