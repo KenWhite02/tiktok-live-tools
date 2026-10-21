@@ -7,3 +7,6 @@ data/
 /tmp/tiktok-mpv.sock
 __pycache__/
 .venv/
+
+# Local code-index link from AI tooling
+.codegraph
