@@ -1,6 +1,7 @@
 /**
  * Stream overlay page served by OverlayService.
- * Transparent background so it sits on top of the stream as a browser source.
+ * Transparent background so it sits on top of the stream as a browser source
+ * (or ?bg=<hex> for a solid one, e.g. when window-capturing the desktop app).
  * Polls /state every second.
  */
 export const OVERLAY_HTML = `<!doctype html>
@@ -19,51 +20,81 @@ export const OVERLAY_HTML = `<!doctype html>
     --line: rgba(255, 255, 255, 0.1);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: transparent; }
+  /*
+   * Built for a small square in a corner of the stream. Everything is sized in rem off
+   * a viewport-scaled root, so shrinking the window shrinks the whole overlay evenly
+   * instead of cutting anything off. The three cards split the height equally.
+   */
+  html { font-size: 4vmin; }
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; }
   body {
-    font: 600 18px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 600 1rem/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
     color: var(--text);
-    padding: 16px;
-    width: 100%;
-    max-width: 460px;
+    padding: 0.6rem;
+    display: grid;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+    overflow: hidden;
   }
   .card {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     background: var(--card);
     border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
+    border-radius: 0.7rem;
+    padding: 0.6rem 0.8rem;
     backdrop-filter: blur(6px);
   }
   .label {
-    font-size: 12px;
+    font-size: 0.6rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--accent-2);
-    margin-bottom: 6px;
+    margin-bottom: 0.25rem;
+    display: flex;
+    justify-content: space-between;
   }
-  .title { font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 14px; margin-top: 4px; }
-  .bar { height: 4px; border-radius: 2px; background: var(--line); margin-top: 10px; overflow: hidden; }
+  .label .more { color: var(--muted); letter-spacing: 0.05em; }
+  .meta { display: flex; justify-content: space-between; gap: 0 0.6rem; color: var(--muted); font-size: 0.7rem; margin-top: 0.3rem; }
+  .meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #now-time { flex-shrink: 0; }
+  .bar { height: 0.3rem; border-radius: 0.15rem; background: var(--line); margin-top: 0.45rem; overflow: hidden; }
   .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: width 1s linear; }
-  ol { margin: 0; padding: 0; list-style-position: inside; }
-  li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; padding: 2px 0; }
-  li .by { color: var(--muted); font-weight: 500; }
-  .more { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  #now-title {
+    font-size: 1.1rem;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  #info { gap: 0.45rem; font-size: 0.85rem; }
   .reply {
     white-space: pre-line;
-    font-size: 15px;
     font-weight: 500;
     display: -webkit-box;
-    -webkit-line-clamp: 14;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     animation: in 0.25s ease-out;
   }
-  .reply + .reply { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
   .reply .user { color: var(--accent); font-weight: 700; }
-  .hint { color: var(--muted); font-size: 14px; }
-  .hint b { color: var(--text); }
+  ol { margin: 0; padding: 0; list-style-position: inside; }
+  li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.05rem 0; }
+  li .by { color: var(--muted); font-weight: 500; }
+  #next-empty { color: var(--muted); }
+  /* How to request a song — always on screen */
+  #hint {
+    border-color: var(--accent);
+    font-size: 1.3rem;
+    line-height: 1.25;
+    text-align: center;
+  }
+  #hint b { color: var(--accent-2); }
+  #hint .example { color: var(--muted); font-weight: 500; font-size: 0.8rem; margin-top: 0.3rem; }
   .hidden { display: none; }
   @keyframes in { from { opacity: 0; transform: translateY(4px); } }
 </style>
@@ -71,24 +102,37 @@ export const OVERLAY_HTML = `<!doctype html>
 <body>
   <div class="card" id="now">
     <div class="label" id="now-label">Now playing</div>
-    <div class="title" id="now-title"></div>
+    <div id="now-title"></div>
     <div class="meta"><span id="now-by"></span><span id="now-time"></span></div>
     <div class="bar"><div id="now-bar"></div></div>
   </div>
 
-  <div class="card hidden" id="next">
-    <div class="label">Up next</div>
-    <ol id="next-list"></ol>
-    <div class="more hidden" id="next-more"></div>
+  <div class="card" id="info">
+    <div class="hidden" id="replies"></div>
+
+    <div id="next">
+      <div class="label">Up next <span class="more hidden" id="next-more"></span></div>
+      <ol id="next-list"></ol>
+      <div class="hidden" id="next-empty">Nothing queued yet</div>
+    </div>
   </div>
 
-  <div class="card hidden" id="replies"></div>
-
-  <div class="card hint">Type <b>!play &lt;song&gt;</b> to request a song</div>
+  <div class="card" id="hint">
+    <div>Type <b>!play &lt;song&gt;</b></div>
+    <div>to request a song</div>
+    <div class="example">e.g. !play goodbyes post malone</div>
+  </div>
 
 <script>
   const REPLY_SECONDS = 20;
+  // Kept small so the middle card's content fits a third of the square
+  const MAX_SHOWN_NEXT = 3;
+  const MAX_SHOWN_NEXT_WITH_REPLY = 2;
   const $ = (id) => document.getElementById(id);
+
+  // ?bg=<hex> gives a solid background for captures that drop transparency
+  const bg = new URLSearchParams(location.search).get('bg');
+  if (bg && /^[0-9a-f]{3,8}$/i.test(bg)) document.body.style.background = '#' + bg;
 
   const fmt = (s) => {
     s = Math.max(0, Math.floor(s || 0));
@@ -111,8 +155,14 @@ export const OVERLAY_HTML = `<!doctype html>
       $('now-bar').style.width = '0';
     }
 
+    // Only the latest reply is shown
+    const fresh = state.replies
+      .filter((r) => state.serverTime - r.at < REPLY_SECONDS * 1000)
+      .slice(0, 1);
+
     const list = $('next-list');
-    list.replaceChildren(...state.upNext.map((item) => {
+    const shownNext = state.upNext.slice(0, fresh.length ? MAX_SHOWN_NEXT_WITH_REPLY : MAX_SHOWN_NEXT);
+    list.replaceChildren(...shownNext.map((item) => {
       const li = document.createElement('li');
       const by = document.createElement('span');
       by.className = 'by';
@@ -120,12 +170,11 @@ export const OVERLAY_HTML = `<!doctype html>
       li.append(item.title, by);
       return li;
     }));
-    $('next').classList.toggle('hidden', state.upNext.length === 0);
-    const extra = state.queueLength - state.upNext.length;
-    $('next-more').textContent = '+ ' + extra + ' more';
+    $('next-empty').classList.toggle('hidden', shownNext.length > 0);
+    const extra = state.queueLength - shownNext.length;
+    $('next-more').textContent = '+' + extra + ' more';
     $('next-more').classList.toggle('hidden', extra <= 0);
 
-    const fresh = state.replies.filter((r) => state.serverTime - r.at < REPLY_SECONDS * 1000);
     const box = $('replies');
     const key = fresh.map((r) => r.at).join(',');
     if (box.dataset.key !== key) {

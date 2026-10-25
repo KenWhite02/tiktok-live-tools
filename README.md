@@ -45,6 +45,24 @@ http://127.0.0.1:9091/
 It shows the current song with progress, the next 5 songs, and each bot reply for
 20 seconds. The background is transparent. Change the port with `OVERLAY_PORT` in `.env`.
 
+### Overlay window (no browser needed)
+
+If your streaming app won't take the `http://` link (TikTok LIVE Studio doesn't),
+use the native macOS window instead. `./start.sh` builds and opens it automatically
+(needs the Xcode Command Line Tools: `xcode-select --install`). It opens two windows:
+
+- **Music Overlay** — in TikTok LIVE Studio add a source → **Window Capture** →
+  "Music Overlay". Resize/position the window as you like; it remembers its size.
+- **Test Console** — type fake chat (`!play goodbyes post malone`, `!skip`, ...) as
+  the host or as a viewer, to rehearse before going live. It's a separate window so
+  it never shows up on stream. Also available at `http://127.0.0.1:9091/console`.
+
+If the capture shows black instead of transparency, set a solid background in `.env`
+(e.g. `OVERLAY_BG=000000`, or `OVERLAY_BG=00ff00` for a chroma key) — the same works
+for the browser source with `?bg=000000`.
+
+Build it by hand with `./desktop/build.sh`; skip it with `NO_OVERLAY_APP=1 ./start.sh`.
+
 ## Prerequisites
 
 - **Node.js** 22+
