@@ -46,7 +46,7 @@ export async function startBot(): Promise<void> {
   const queue = new QueueService(config);
   const bridge = new BridgeService(config.wsHost, config.wsPort);
   const tiktok = new TikTokService(bridge);
-  const overlay = new OverlayService(config, player, queue);
+  const overlay = new OverlayService(config, player, queue, bridge);
 
   // Store in container for command handlers
   setBridgeService(bridge);

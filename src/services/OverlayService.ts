@@ -1,8 +1,11 @@
 import { createServer, type Server } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AppConfig } from '../types/index.js';
+import type { BridgeService } from './BridgeService.js';
 import type { PlayerService } from './PlayerService.js';
 import type { QueueService } from './QueueService.js';
 import { OVERLAY_HTML } from '../overlay/page.js';
+import { CONSOLE_HTML } from '../overlay/console.js';
 import { getLogger } from '../utils/logger.js';
 
 /** A bot reply shown on the overlay */
@@ -15,6 +18,8 @@ interface OverlayReply {
 /** Keep only the latest few replies; the page fades them out after a while */
 const MAX_REPLIES = 3;
 const MAX_UP_NEXT = 5;
+/** Simulated chat bodies are tiny; refuse anything bigger */
+const MAX_SIMULATE_BODY = 4096;
 
 /**
  * Serves a stream overlay (now playing, up next, latest bot replies).
@@ -25,13 +30,20 @@ export class OverlayService {
   private readonly port: number;
   private readonly player: PlayerService;
   private readonly queue: QueueService;
+  private readonly bridge: BridgeService;
   private server: Server | null = null;
   private replies: OverlayReply[] = [];
 
-  constructor(config: AppConfig, player: PlayerService, queue: QueueService) {
+  constructor(
+    config: AppConfig,
+    player: PlayerService,
+    queue: QueueService,
+    bridge: BridgeService,
+  ) {
     this.port = config.overlayPort;
     this.player = player;
     this.queue = queue;
+    this.bridge = bridge;
   }
 
   get url(): string {
@@ -56,6 +68,17 @@ export class OverlayService {
       if (path === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(OVERLAY_HTML);
+        return;
+      }
+
+      if (path === '/console') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(CONSOLE_HTML);
+        return;
+      }
+
+      if (path === '/simulate' && req.method === 'POST') {
+        this.handleSimulate(req, res);
         return;
       }
 
@@ -84,6 +107,57 @@ export class OverlayService {
 
     this.server.listen(this.port, '127.0.0.1', () => {
       logger.info({ url: this.url }, 'Overlay ready — add it as a browser source');
+    });
+  }
+
+  /**
+   * Inject a fake chat message (from the test console) as if it came from TikTok.
+   * Only JSON bodies are accepted and no CORS headers are sent, so other
+   * websites open in a browser can't post here (their preflight fails).
+   */
+  private handleSimulate(req: IncomingMessage, res: ServerResponse): void {
+    if (!req.headers['content-type']?.startsWith('application/json')) {
+      res.writeHead(415).end();
+      return;
+    }
+
+    let body = '';
+    req.on('data', (chunk: Buffer) => {
+      body += chunk.toString();
+      if (body.length > MAX_SIMULATE_BODY) {
+        res.writeHead(413).end();
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      if (res.writableEnded) return;
+      let data: { message?: unknown; nickname?: unknown; host?: unknown };
+      try {
+        data = JSON.parse(body);
+      } catch {
+        res.writeHead(400).end();
+        return;
+      }
+
+      const message = String(data.message ?? '').trim();
+      const nickname = String(data.nickname ?? '').trim() || 'TestViewer';
+      if (!message) {
+        res.writeHead(400).end();
+        return;
+      }
+
+      const isHost = data.host === true;
+      getLogger().info({ nickname, message, isHost }, 'Simulated chat message');
+      this.bridge.emit('bridge-chat', {
+        userId: `sim-${nickname.toLowerCase()}`,
+        uniqueId: nickname.toLowerCase(),
+        nickname,
+        comment: message,
+        isModerator: isHost,
+        isHost,
+        timestamp: new Date(),
+      });
+      res.writeHead(204).end();
     });
   }
 

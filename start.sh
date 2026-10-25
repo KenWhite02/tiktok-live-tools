@@ -11,6 +11,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BRIDGE_DIR="$ROOT_DIR/bridge"
+DESKTOP_DIR="$ROOT_DIR/desktop"
+OVERLAY_APP_BIN="$DESKTOP_DIR/build/Music Overlay.app/Contents/MacOS/MusicOverlay"
 VENV_DIR="$BRIDGE_DIR/.venv"
 cd "$ROOT_DIR"
 
@@ -80,11 +82,13 @@ fi
 
 NODE_PID=""
 BRIDGE_PID=""
+APP_PID=""
 
 cleanup() {
   trap - INT TERM EXIT
   echo
   info "Shutting down..."
+  [[ -n "$APP_PID" ]] && kill -TERM "$APP_PID" 2>/dev/null || true
   [[ -n "$BRIDGE_PID" ]] && kill -INT "$BRIDGE_PID" 2>/dev/null || true
   # Node handles SIGTERM by stopping mpv; signal its whole process group
   [[ -n "$NODE_PID" ]] && kill -TERM -- "-$NODE_PID" 2>/dev/null || true
@@ -122,7 +126,28 @@ info "Starting Python bridge for @$TIKTOK_USERNAME..."
 BRIDGE_PID=$!
 
 OVERLAY_PORT="${OVERLAY_PORT:-$(env_value "$ROOT_DIR/.env" OVERLAY_PORT)}"
-info "Stream overlay: http://127.0.0.1:${OVERLAY_PORT:-9091}/ (add as a browser source)"
+OVERLAY_PORT="${OVERLAY_PORT:-9091}"
+OVERLAY_BG="${OVERLAY_BG:-$(env_value "$ROOT_DIR/.env" OVERLAY_BG)}"
+
+# Native overlay window + test console (set NO_OVERLAY_APP=1 to skip)
+if [[ -n "${NO_OVERLAY_APP:-}" ]]; then
+  :
+elif ! command -v swiftc >/dev/null 2>&1; then
+  info "swiftc not found — skipping the overlay window app (install with: xcode-select --install)"
+else
+  if [[ ! -x "$OVERLAY_APP_BIN" || "$DESKTOP_DIR/MusicOverlay.swift" -nt "$OVERLAY_APP_BIN" ]]; then
+    info "Building the overlay window app..."
+    "$DESKTOP_DIR/build.sh" || info "Overlay app build failed — use the browser URL below instead"
+  fi
+  if [[ -x "$OVERLAY_APP_BIN" ]]; then
+    info "Opening the Music Overlay and Test Console windows..."
+    OVERLAY_PORT="$OVERLAY_PORT" OVERLAY_BG="$OVERLAY_BG" "$OVERLAY_APP_BIN" &
+    APP_PID=$!
+  fi
+fi
+
+info "Stream overlay: http://127.0.0.1:${OVERLAY_PORT}/ (or Window Capture the \"Music Overlay\" window)"
+info "Test console:   http://127.0.0.1:${OVERLAY_PORT}/console"
 info "Bot running — press Ctrl+C to stop"
 
 # Exit (and clean up) as soon as either process stops
