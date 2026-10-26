@@ -143,6 +143,17 @@ This checks prerequisites, installs dependencies on first run, starts the
 Node.js app and the Python bridge, and stops everything (including mpv) on
 Ctrl+C. The bridge reconnects automatically if the Node.js app restarts.
 
+### Testing Offline (before going live)
+
+```bash
+./start-test.sh
+```
+
+Same as `./start.sh` but without the Python bridge, so it keeps running while
+you're not live (the bridge exits when your account is offline). Send fake chat
+from the **Test Console** window or `http://127.0.0.1:9091/console` — songs
+really play through mpv and show on the overlay. No `bridge/.env` or Python needed.
+
 ### Running the Bridge Manually
 
 The bridge and Node.js app run as two separate processes. Start Node.js first,

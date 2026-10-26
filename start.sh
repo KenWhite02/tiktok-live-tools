@@ -6,6 +6,9 @@
 #
 # Checks prerequisites, installs dependencies on first run, starts the
 # Node.js app and the Python bridge, and stops both (and mpv) on Ctrl+C.
+#
+# Set NO_BRIDGE=1 (or run ./start-test.sh) to skip the Python bridge and
+# rehearse offline with the Test Console — TikTok is never contacted.
 
 set -euo pipefail
 
@@ -30,19 +33,23 @@ for cmd in node pnpm mpv yt-dlp lsof; do
   command -v "$cmd" >/dev/null 2>&1 || fail "'$cmd' is not installed (see README → Prerequisites)"
 done
 
-PYTHON="$(command -v python3.12 || command -v python3 || true)"
-[[ -n "$PYTHON" ]] || fail "python3 is not installed"
+if [[ -z "${NO_BRIDGE:-}" ]]; then
+  PYTHON="$(command -v python3.12 || command -v python3 || true)"
+  [[ -n "$PYTHON" ]] || fail "python3 is not installed"
+fi
 
 [[ -f "$ROOT_DIR/.env" ]] || { cp "$ROOT_DIR/.env.example" "$ROOT_DIR/.env"; info "Created .env from .env.example"; }
 
-if [[ ! -f "$BRIDGE_DIR/.env" ]]; then
-  cp "$BRIDGE_DIR/.env.example" "$BRIDGE_DIR/.env"
-  fail "Created bridge/.env — set TIKTOK_USERNAME in it, then run ./start.sh again"
-fi
+if [[ -z "${NO_BRIDGE:-}" ]]; then
+  if [[ ! -f "$BRIDGE_DIR/.env" ]]; then
+    cp "$BRIDGE_DIR/.env.example" "$BRIDGE_DIR/.env"
+    fail "Created bridge/.env — set TIKTOK_USERNAME in it, then run ./start.sh again"
+  fi
 
-TIKTOK_USERNAME="${TIKTOK_USERNAME:-$(env_value "$BRIDGE_DIR/.env" TIKTOK_USERNAME)}"
-if [[ -z "$TIKTOK_USERNAME" || "$TIKTOK_USERNAME" == "your_tiktok_username" ]]; then
-  fail "Set TIKTOK_USERNAME in bridge/.env"
+  TIKTOK_USERNAME="${TIKTOK_USERNAME:-$(env_value "$BRIDGE_DIR/.env" TIKTOK_USERNAME)}"
+  if [[ -z "$TIKTOK_USERNAME" || "$TIKTOK_USERNAME" == "your_tiktok_username" ]]; then
+    fail "Set TIKTOK_USERNAME in bridge/.env"
+  fi
 fi
 
 # A WS_PORT set in the environment overrides both .env files
@@ -62,13 +69,15 @@ if [[ ! -d "$ROOT_DIR/node_modules" ]]; then
   pnpm install
 fi
 
-if [[ ! -x "$VENV_DIR/bin/python" ]]; then
-  info "Creating Python virtualenv in bridge/.venv..."
-  "$PYTHON" -m venv "$VENV_DIR"
-fi
-if ! "$VENV_DIR/bin/python" -c "import TikTokLive, websockets, dotenv" 2>/dev/null; then
-  info "Installing Python bridge dependencies..."
-  "$VENV_DIR/bin/python" -m pip install --quiet -r "$BRIDGE_DIR/requirements.txt"
+if [[ -z "${NO_BRIDGE:-}" ]]; then
+  if [[ ! -x "$VENV_DIR/bin/python" ]]; then
+    info "Creating Python virtualenv in bridge/.venv..."
+    "$PYTHON" -m venv "$VENV_DIR"
+  fi
+  if ! "$VENV_DIR/bin/python" -c "import TikTokLive, websockets, dotenv" 2>/dev/null; then
+    info "Installing Python bridge dependencies..."
+    "$VENV_DIR/bin/python" -m pip install --quiet -r "$BRIDGE_DIR/requirements.txt"
+  fi
 fi
 
 # ─── Refuse to double-start ─────────────────────────────────────────────────
@@ -121,9 +130,13 @@ done
 lsof -nP -iTCP:"$WS_PORT" -sTCP:LISTEN >/dev/null 2>&1 \
   || info "WebSocket server not up yet — the bridge will keep retrying"
 
-info "Starting Python bridge for @$TIKTOK_USERNAME..."
-(cd "$BRIDGE_DIR" && exec "$VENV_DIR/bin/python" -u server.py) &
-BRIDGE_PID=$!
+if [[ -n "${NO_BRIDGE:-}" ]]; then
+  info "Test mode — skipping the Python bridge (TikTok is not contacted)"
+else
+  info "Starting Python bridge for @$TIKTOK_USERNAME..."
+  (cd "$BRIDGE_DIR" && exec "$VENV_DIR/bin/python" -u server.py) &
+  BRIDGE_PID=$!
+fi
 
 OVERLAY_PORT="${OVERLAY_PORT:-$(env_value "$ROOT_DIR/.env" OVERLAY_PORT)}"
 OVERLAY_PORT="${OVERLAY_PORT:-9091}"
@@ -148,11 +161,16 @@ fi
 
 info "Stream overlay: http://127.0.0.1:${OVERLAY_PORT}/ (or Window Capture the \"Music Overlay\" window)"
 info "Test console:   http://127.0.0.1:${OVERLAY_PORT}/console"
-info "Bot running — press Ctrl+C to stop"
+if [[ -n "${NO_BRIDGE:-}" ]]; then
+  info "Bot running in TEST MODE — send chat from the Test Console; press Ctrl+C to stop"
+else
+  info "Bot running — press Ctrl+C to stop"
+fi
 
 # Exit (and clean up) as soon as either process stops
-while kill -0 "$NODE_PID" 2>/dev/null && kill -0 "$BRIDGE_PID" 2>/dev/null; do
+bridge_alive() { [[ -z "$BRIDGE_PID" ]] || kill -0 "$BRIDGE_PID" 2>/dev/null; }
+while kill -0 "$NODE_PID" 2>/dev/null && bridge_alive; do
   sleep 1
 done
 kill -0 "$NODE_PID" 2>/dev/null || info "Node.js app exited"
-kill -0 "$BRIDGE_PID" 2>/dev/null || info "Python bridge exited"
+bridge_alive || info "Python bridge exited"
