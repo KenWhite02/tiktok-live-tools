@@ -57,7 +57,7 @@ export const CONSOLE_HTML = `<!doctype html>
       <button class="primary" type="submit">Send</button>
     </form>
     <div class="row">
-      <label>as <input type="text" id="nickname" value="TestViewer"></label>
+      <label>as <input type="text" id="nickname" value="Kaneki"></label>
       <label><input type="checkbox" id="host" checked> host / mod (no cooldown)</label>
     </div>
     <div class="row" id="quick">

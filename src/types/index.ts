@@ -58,8 +58,14 @@ export interface AppConfig {
   overlayPort: number;
   mpvPath: string;
   ytDlpPath: string;
+  /** Browser to read YouTube cookies from (e.g. chrome, firefox, safari) */
+  ytDlpCookiesFromBrowser: string;
+  /** Path to a Netscape cookies.txt; takes precedence over the browser option */
+  ytDlpCookiesFile: string;
   cooldown: number;
   maxDuration: number;
+  /** Songs one viewer may have playing + waiting at once (host is exempt) */
+  maxRequestsPerUser: number;
   defaultVolume: number;
   databasePath: string;
   mpvSocketPath: string;

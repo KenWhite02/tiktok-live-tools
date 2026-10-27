@@ -245,10 +245,16 @@ WS_PORT=9090
 # Media Player Paths
 MPV_PATH=mpv
 YTDLP_PATH=yt-dlp
+# YouTube cookies, needed when YouTube says "Sign in to confirm you're not a bot".
+# Use a browser you're signed into YouTube with (chrome, firefox, safari, brave, edge)...
+# YTDLP_COOKIES_FROM_BROWSER=chrome
+# ...or an exported Netscape cookies.txt (takes precedence)
+# YTDLP_COOKIES_FILE=./data/youtube-cookies.txt
 
 # Bot Settings
 COOLDOWN=120              # Anti-spam cooldown in seconds (default: 120)
 MAX_DURATION=600          # Max song duration in seconds (default: 600 = 10 min)
+MAX_REQUESTS_PER_USER=2   # Max songs one viewer can have playing + waiting (host is exempt)
 DEFAULT_VOLUME=70         # Default volume (0-100)
 
 # Database
