@@ -10,9 +10,12 @@ import { getLogger } from '../utils/logger.js';
 export class QueueService extends EventEmitter {
   private queue: QueueItem[] = [];
   private currentItem: QueueItem | null = null;
+  /** Songs one user may have playing + waiting at once */
+  readonly maxPerUser: number;
 
-  constructor(_config: AppConfig) {
+  constructor(config: AppConfig) {
     super();
+    this.maxPerUser = config.maxRequestsPerUser;
   }
 
   /** Add a song to the end of the queue */
@@ -80,6 +83,17 @@ export class QueueService extends EventEmitter {
   /** Get queue length */
   get length(): number {
     return this.queue.length;
+  }
+
+  /** Count a user's songs that are playing now or still waiting */
+  countForUser(userId: string): number {
+    const playing = this.currentItem?.requestedBy === userId ? 1 : 0;
+    return playing + this.queue.filter((item) => item.requestedBy === userId).length;
+  }
+
+  /** True when the user can't request more until one of their songs finishes */
+  isUserAtLimit(userId: string): boolean {
+    return this.countForUser(userId) >= this.maxPerUser;
   }
 
   /** Check if queue is empty */

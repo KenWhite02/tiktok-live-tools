@@ -26,10 +26,17 @@ interface YtDlpVideoInfo {
 export class SearchService {
   private readonly ytDlpPath: string;
   private readonly maxDuration: number;
+  /** Auth args prepended to every yt-dlp call, so YouTube's bot check passes */
+  private readonly authArgs: string[];
 
   constructor(config: AppConfig) {
     this.ytDlpPath = config.ytDlpPath;
     this.maxDuration = config.maxDuration;
+    this.authArgs = config.ytDlpCookiesFile
+      ? ['--cookies', config.ytDlpCookiesFile]
+      : config.ytDlpCookiesFromBrowser
+        ? ['--cookies-from-browser', config.ytDlpCookiesFromBrowser]
+        : [];
     getLogger().info({ maxDuration: this.maxDuration }, 'SearchService initialized');
   }
 
@@ -68,6 +75,7 @@ export class SearchService {
   private async searchResults(query: string, count = 5): Promise<YtDlpVideoInfo[]> {
     try {
       const { stdout } = await execFileAsync(this.ytDlpPath, [
+        ...this.authArgs,
         `ytsearch${count}:${query}`,
         '--dump-json',
         '--no-playlist',
@@ -96,6 +104,7 @@ export class SearchService {
     try {
       // Try to get best audio stream URL
       const { stdout } = await execFileAsync(this.ytDlpPath, [
+        ...this.authArgs,
         song.webpageUrl || song.url,
         '-f',
         'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
@@ -122,6 +131,7 @@ export class SearchService {
   async getMetadata(url: string): Promise<Song | null> {
     try {
       const { stdout } = await execFileAsync(this.ytDlpPath, [
+        ...this.authArgs,
         url,
         '--dump-json',
         '--no-playlist',

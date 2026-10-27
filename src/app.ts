@@ -81,18 +81,7 @@ export async function startBot(): Promise<void> {
     // Also emit to the event bus for modular handlers
     TikTokEventBus.emitChat({ ...data, timestamp: new Date() });
 
-    // Check cooldown
-    if (!data.isModerator && cooldown.isOnCooldown(data.userId)) {
-      const remaining = cooldown.getRemainingCooldown(data.userId);
-      // Only block !play commands during cooldown
-      if (data.comment.trim().startsWith('!play') || data.comment.trim().startsWith('!p ')) {
-        console.log(`\n📢 @${data.uniqueId}: ${data.comment}`);
-        console.log(`🤖 ⏳ Cooldown: ${remaining}s remaining\n`);
-        overlay.addReply(data.nickname, `⏳ Cooldown: ${remaining}s remaining`);
-        return;
-      }
-    }
-
+    // Cooldown and per-user limits are enforced inside !play, which sees every alias
     const response = await executeCommand(data.comment, {
       userId: data.userId,
       uniqueId: data.uniqueId,

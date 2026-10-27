@@ -140,7 +140,7 @@ export class OverlayService {
       }
 
       const message = String(data.message ?? '').trim();
-      const nickname = String(data.nickname ?? '').trim() || 'TestViewer';
+      const nickname = String(data.nickname ?? '').trim() || 'Kaneki';
       if (!message) {
         res.writeHead(400).end();
         return;
