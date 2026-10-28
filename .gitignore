@@ -8,6 +8,7 @@ data/
 __pycache__/
 .venv/
 desktop/build/
+.DS_Store
 
 # Local code-index link from AI tooling
 .codegraph
