@@ -205,6 +205,15 @@ export async function startBot(): Promise<void> {
     if (current) announceFailure(current);
   });
 
+  // The video's audio is muted on YouTube → skip it like !skip does
+  player.on('song-muted', async () => {
+    const current = queue.getCurrent();
+    if (!current) return;
+    overlay.addReply(current.requestedByNickname, `🔇 **${current.song.title}** is muted on YouTube, skipping.`);
+    await player.stop();
+    queue.skipCurrent();
+  });
+
   // When song ends → play next
   player.on('song-ended', () => {
     logger.debug('Song ended, playing next');

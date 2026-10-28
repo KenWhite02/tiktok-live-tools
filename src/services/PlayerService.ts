@@ -17,6 +17,15 @@ interface MpvEvent {
 }
 
 /**
+ * Audio this quiet for this long means the video's sound is gone — YouTube
+ * mutes videos over copyright claims and keeps them up, so they "play" silently.
+ */
+const SILENCE_DB = -60;
+const SILENCE_SECONDS = 8;
+/** Silence that starts this close to the end is just the song's fade-out */
+const SILENCE_END_MARGIN = 15;
+
+/**
  * Controls an mpv instance via JSON IPC protocol.
  * Spawns mpv with --idle and communicates through a Unix socket.
  */
@@ -35,6 +44,8 @@ export class PlayerService extends EventEmitter {
   private isLoadingSong = false;
   /** mpv playlist entry of the current song, to tell its end-file apart from a replaced song's */
   private currentEntryId: number | null = null;
+  /** Whether song-muted already fired for the current song */
+  private mutedReported = false;
   constructor(config: AppConfig) {
     super();
     this.config = config;
@@ -72,6 +83,7 @@ export class PlayerService extends EventEmitter {
           '--cache=yes',
           '--demuxer-max-bytes=10M',
           '--demuxer-max-back-bytes=2M',
+          `--af=@silence:lavfi=[silencedetect=n=${SILENCE_DB}dB:d=${SILENCE_SECONDS}]`,
         ]);
 
         logger.info(
@@ -128,6 +140,7 @@ export class PlayerService extends EventEmitter {
       this.rawCommand('observe_property', 5, 'time-pos');
       this.rawCommand('observe_property', 6, 'eof-reached');
       this.rawCommand('observe_property', 7, 'idle-active');
+      this.rawCommand('observe_property', 8, 'af-metadata/silence');
     });
 
     this.socket.on('data', (data: Buffer) => {
@@ -241,7 +254,22 @@ export class PlayerService extends EventEmitter {
           this.emit('player-idle');
         }
         break;
+      case 'af-metadata/silence':
+        this.checkMuted(data as Record<string, string> | null);
+        break;
     }
+  }
+
+  /** Emit song-muted once if the current song has gone silent well before its end */
+  private checkMuted(metadata: Record<string, string> | null): void {
+    const silenceStart = Number(metadata?.['lavfi.silence_start']);
+    const song = this.currentSong;
+    if (!song || this.mutedReported || Number.isNaN(silenceStart)) return;
+    if (silenceStart > song.duration - SILENCE_END_MARGIN) return;
+
+    this.mutedReported = true;
+    getLogger().warn({ title: song.title, silenceStart }, 'Song is silent, probably muted on YouTube');
+    this.emit('song-muted');
   }
 
   /** Send a command to mpv */
@@ -278,6 +306,7 @@ export class PlayerService extends EventEmitter {
     getLogger().info({ title: song.title }, 'Loading song into mpv');
 
     this.currentSong = song;
+    this.mutedReported = false;
 
     try {
       this.isLoadingSong = true;
