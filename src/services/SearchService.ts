@@ -63,14 +63,23 @@ export class SearchService {
       .filter((song): song is Song => song !== null);
 
     const lyricSong = valid.find((song) => /lyric/i.test(song.title));
-    if (lyricSong) return lyricSong;
-    if (valid.length > 0) return valid[0];
+    const picked = lyricSong ?? valid[0];
+    if (picked) {
+      logger.info(
+        { title: picked.title, passed: valid.length, results: results.length, lyricMatch: !!lyricSong },
+        'Picked search result',
+      );
+      return picked;
+    }
 
     // No usable lyric results — fall back to the plain query
     if (lyricQuery !== query) {
       for (const info of await this.searchResults(query)) {
         const song = this.validateAndCreateSong(info);
-        if (song) return song;
+        if (song) {
+          logger.info({ title: song.title, fallback: true }, 'Picked search result');
+          return song;
+        }
       }
     }
 
@@ -229,7 +238,7 @@ export class SearchService {
       webpageUrl: info.webpage_url || `https://www.youtube.com/watch?v=${info.id}`,
     });
 
-    logger.info({ title: song.title, duration: song.duration }, 'Song validated successfully');
+    logger.debug({ title: song.title, duration: song.duration }, 'Search result passed validation');
     return song;
   }
 }
