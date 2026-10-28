@@ -1,5 +1,6 @@
-import type { AppConfig } from './types/index.js';
+import type { AppConfig, QueueItem } from './types/index.js';
 import { loadConfig } from './config/index.js';
+import { displayTitle } from './models/Song.js';
 import { createLogger, getLogger } from './utils/logger.js';
 import {
   BridgeService,
@@ -153,6 +154,11 @@ export async function startBot(): Promise<void> {
 
   // ─── Queue → Player Pipeline ──────────────────────────────────────────────
 
+  /** Tell viewers on the overlay that a request couldn't be played */
+  function announceFailure(item: QueueItem): void {
+    overlay.addReply(item.requestedByNickname, `❌ Couldn't play **${displayTitle(item.song.title)}**, skipping.`);
+  }
+
   /** Play the next song in the queue */
   async function playNext(): Promise<void> {
     if (isShuttingDown) return;
@@ -174,6 +180,7 @@ export async function startBot(): Promise<void> {
       const audioUrl = await search.getAudioUrl(next.song);
       if (!audioUrl) {
         logger.warn({ title: next.song.title }, 'Could not get audio URL, skipping');
+        announceFailure(next);
         queue.completeCurrent();
         setTimeout(() => playNext(), 100);
         return;
@@ -187,10 +194,26 @@ export async function startBot(): Promise<void> {
       db.recordUser(next.requestedBy, next.requestedBy, next.requestedByNickname);
     } catch (error) {
       logger.error({ error, title: next.song.title }, 'Failed to play song, skipping');
+      announceFailure(next);
       queue.completeCurrent();
       setTimeout(() => playNext(), 100);
     }
   }
+
+  // mpv couldn't play the stream; song-ended follows and moves on
+  player.on('song-failed', () => {
+    const current = queue.getCurrent();
+    if (current) announceFailure(current);
+  });
+
+  // The video's audio is muted on YouTube → skip it like !skip does
+  player.on('song-muted', async () => {
+    const current = queue.getCurrent();
+    if (!current) return;
+    overlay.addReply(current.requestedByNickname, `🔇 **${displayTitle(current.song.title)}** is muted on YouTube, skipping.`);
+    await player.stop();
+    queue.skipCurrent();
+  });
 
   // When song ends → play next
   player.on('song-ended', () => {

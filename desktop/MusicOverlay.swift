@@ -1,7 +1,8 @@
 // Native window for the stream overlay, so no browser is needed.
 //
 // Opens two windows on the bot's overlay server:
-//   - "Music Overlay": the overlay page — add it in TikTok LIVE Studio / OBS via Window Capture
+//   - "Music Overlay": the overlay page — add it in TikTok LIVE Studio / OBS via Window Capture.
+//     It keeps rendering while covered by other windows, so it can sit behind LIVE Studio.
 //   - "Test Console":  send fake chat (!play, !skip, ...) to rehearse before a live
 //
 // Env: OVERLAY_PORT (default 9091), OVERLAY_BG (hex colour, e.g. 000000 or 00ff00,
@@ -21,13 +22,23 @@ let overlayBg = env["OVERLAY_BG"].flatMap { $0.isEmpty ? nil : $0 }
 final class RetryingWebView: WKWebView, WKNavigationDelegate {
     private let target: URL
 
-    init(url: URL, transparent: Bool) {
+    init(url: URL, transparent: Bool, keepAliveWhenHidden: Bool) {
         target = url
-        super.init(frame: .zero, configuration: WKWebViewConfiguration())
+        let configuration = WKWebViewConfiguration()
+        if keepAliveWhenHidden {
+            // Don't suspend or throttle the page when it isn't visible
+            disablePrivateFlag(on: configuration.preferences, key: "pageVisibilityBasedProcessSuppressionEnabled")
+            disablePrivateFlag(on: configuration.preferences, key: "hiddenPageDOMTimerThrottlingEnabled")
+        }
+        super.init(frame: .zero, configuration: configuration)
         navigationDelegate = self
         if transparent {
             setValue(false, forKey: "drawsBackground")
             underPageBackgroundColor = .clear
+        }
+        if keepAliveWhenHidden {
+            // Keep painting when another window covers this one, or window capture freezes/blanks
+            disablePrivateFlag(on: self, key: "windowOcclusionDetectionEnabled")
         }
         load(URLRequest(url: target))
     }
@@ -55,11 +66,25 @@ final class RetryingWebView: WKWebView, WKNavigationDelegate {
     }
 }
 
+/// Turns off a private WebKit setting, skipping it if this macOS version doesn't have it.
+private func disablePrivateFlag(on object: NSObject, key: String) {
+    let setter = "_set" + key.prefix(1).uppercased() + key.dropFirst() + ":"
+    if object.responds(to: Selector(setter)) {
+        object.setValue(false, forKey: key)
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayWindow: NSWindow!
     private var consoleWindow: NSWindow!
+    private var activity: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Opt out of App Nap, which throttles the app once its windows are in the background
+        activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep],
+            reason: "Overlay must keep rendering for window capture"
+        )
         buildMenu()
 
         var overlayURL = base + "/"
@@ -70,7 +95,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             url: URL(string: overlayURL)!,
             size: NSSize(width: 480, height: 480),
             autosave: "MusicOverlaySquare",
-            transparent: overlayBg == nil
+            transparent: overlayBg == nil,
+            keepAliveWhenHidden: true
         )
         // The overlay is laid out for a square; keep it square while resizing
         overlayWindow.contentAspectRatio = NSSize(width: 1, height: 1)
@@ -79,7 +105,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             url: URL(string: base + "/console")!,
             size: NSSize(width: 520, height: 640),
             autosave: "TestConsoleWindow",
-            transparent: false
+            transparent: false,
+            keepAliveWhenHidden: false
         )
 
         overlayWindow.makeKeyAndOrderFront(nil)
@@ -95,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    private func makeWindow(title: String, url: URL, size: NSSize, autosave: String, transparent: Bool) -> NSWindow {
+    private func makeWindow(title: String, url: URL, size: NSSize, autosave: String, transparent: Bool, keepAliveWhenHidden: Bool) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -104,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = title
         window.isReleasedWhenClosed = false
-        window.contentView = RetryingWebView(url: url, transparent: transparent)
+        window.contentView = RetryingWebView(url: url, transparent: transparent, keepAliveWhenHidden: keepAliveWhenHidden)
 
         if transparent {
             // Only the overlay's cards are drawn; the rest of the window is see-through

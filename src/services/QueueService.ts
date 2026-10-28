@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { AppConfig, Song, QueueItem } from '../types/index.js';
 import { createQueueItem } from '../models/QueueItem.js';
+import { displayTitle } from '../models/Song.js';
 import { getLogger } from '../utils/logger.js';
 
 /**
@@ -156,7 +157,7 @@ export class QueueService extends EventEmitter {
       const mins = Math.floor(this.currentItem.song.duration / 60);
       const secs = Math.floor(this.currentItem.song.duration % 60);
       lines.push(
-        `▶️ **Now Playing**: ${this.currentItem.song.title} (${mins}:${secs.toString().padStart(2, '0')}) — requested by ${this.currentItem.requestedByNickname}`,
+        `▶️ **Now Playing**: ${displayTitle(this.currentItem.song.title)} (${mins}:${secs.toString().padStart(2, '0')}) — requested by ${this.currentItem.requestedByNickname}`,
       );
     }
 
@@ -167,7 +168,7 @@ export class QueueService extends EventEmitter {
       const mins = Math.floor(item.song.duration / 60);
       const secs = Math.floor(item.song.duration % 60);
       lines.push(
-        `  ${i + 1}. ${item.song.title} (${mins}:${secs.toString().padStart(2, '0')}) — @${item.requestedByNickname}`,
+        `  ${i + 1}. ${displayTitle(item.song.title)} (${mins}:${secs.toString().padStart(2, '0')}) — @${item.requestedByNickname}`,
       );
     }
 

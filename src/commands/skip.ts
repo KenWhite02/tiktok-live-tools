@@ -1,5 +1,6 @@
 import type { CommandHandler } from '../types/index.js';
 import { PlayerService, QueueService } from '../container.js';
+import { displayTitle } from '../models/Song.js';
 
 export const skipCommand: CommandHandler = {
   name: 'skip',
@@ -21,7 +22,7 @@ export const skipCommand: CommandHandler = {
     const next = QueueService.peek();
 
     if (next) {
-      return `⏭️ Skipped! Now playing: **${next.song.title}**`;
+      return `⏭️ Skipped! Now playing: **${displayTitle(next.song.title)}**`;
     }
 
     return '⏭️ Song skipped. Queue is now empty.';

@@ -255,7 +255,7 @@ YTDLP_PATH=yt-dlp
 COOLDOWN=120              # Anti-spam cooldown in seconds (default: 120)
 MAX_DURATION=600          # Max song duration in seconds (default: 600 = 10 min)
 MAX_REQUESTS_PER_USER=2   # Max songs one viewer can have playing + waiting (host is exempt)
-DEFAULT_VOLUME=70         # Default volume (0-100)
+DEFAULT_VOLUME=30         # Default volume (0-100)
 
 # Database
 DATABASE_PATH=./data/bot.db

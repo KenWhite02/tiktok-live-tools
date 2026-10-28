@@ -29,7 +29,7 @@ export function loadConfig(): AppConfig {
     cooldown: numericEnv('COOLDOWN', 120),
     maxDuration: numericEnv('MAX_DURATION', 600),
     maxRequestsPerUser: numericEnv('MAX_REQUESTS_PER_USER', 2),
-    defaultVolume: numericEnv('DEFAULT_VOLUME', 70),
+    defaultVolume: numericEnv('DEFAULT_VOLUME', 30),
     databasePath: optionalEnv('DATABASE_PATH', './data/bot.db'),
     mpvSocketPath: optionalEnv('MPV_SOCKET_PATH', '/tmp/tiktok-mpv.sock'),
     logLevel: optionalEnv('LOG_LEVEL', 'info'),

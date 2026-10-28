@@ -1,5 +1,6 @@
 import type { CommandContext, CommandHandler } from '../types/index.js';
 import { CooldownService, QueueService, SearchService } from '../container.js';
+import { displayTitle } from '../models/Song.js';
 
 /** Why this user can't request right now, or null if they can */
 function blockedReply(ctx: CommandContext): string | null {
@@ -50,20 +51,19 @@ export const playCommand: CommandHandler = {
       return blockedNow;
     }
 
-    QueueService.enqueue(song, ctx.userId, ctx.nickname);
+    const item = QueueService.enqueue(song, ctx.userId, ctx.nickname);
     if (!ctx.isModerator) {
       CooldownService.setCooldown(ctx.userId);
     }
     const mins = Math.floor(song.duration / 60);
     const secs = Math.floor(song.duration % 60);
-    const position = QueueService.length;
+    const length = `${mins}:${secs.toString().padStart(2, '0')}`;
 
-    let response = `✅ **${song.title}** (${mins}:${secs.toString().padStart(2, '0')}) has been added to the queue!`;
-
-    if (position > 0) {
-      response += ` Position: #${position}`;
+    // With nothing playing, enqueue starts the song straight away
+    if (QueueService.getCurrent() === item) {
+      return `▶️ Now playing: **${displayTitle(song.title)}** (${length})`;
     }
 
-    return response;
+    return `✅ **${displayTitle(song.title)}** (${length}) has been added to the queue! Position: #${QueueService.length}`;
   },
 };
