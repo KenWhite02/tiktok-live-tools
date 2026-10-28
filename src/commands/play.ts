@@ -50,20 +50,19 @@ export const playCommand: CommandHandler = {
       return blockedNow;
     }
 
-    QueueService.enqueue(song, ctx.userId, ctx.nickname);
+    const item = QueueService.enqueue(song, ctx.userId, ctx.nickname);
     if (!ctx.isModerator) {
       CooldownService.setCooldown(ctx.userId);
     }
     const mins = Math.floor(song.duration / 60);
     const secs = Math.floor(song.duration % 60);
-    const position = QueueService.length;
+    const length = `${mins}:${secs.toString().padStart(2, '0')}`;
 
-    let response = `✅ **${song.title}** (${mins}:${secs.toString().padStart(2, '0')}) has been added to the queue!`;
-
-    if (position > 0) {
-      response += ` Position: #${position}`;
+    // With nothing playing, enqueue starts the song straight away
+    if (QueueService.getCurrent() === item) {
+      return `▶️ Now playing: **${song.title}** (${length})`;
     }
 
-    return response;
+    return `✅ **${song.title}** (${length}) has been added to the queue! Position: #${QueueService.length}`;
   },
 };

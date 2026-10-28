@@ -1,4 +1,4 @@
-import type { AppConfig } from './types/index.js';
+import type { AppConfig, QueueItem } from './types/index.js';
 import { loadConfig } from './config/index.js';
 import { createLogger, getLogger } from './utils/logger.js';
 import {
@@ -153,6 +153,11 @@ export async function startBot(): Promise<void> {
 
   // ─── Queue → Player Pipeline ──────────────────────────────────────────────
 
+  /** Tell viewers on the overlay that a request couldn't be played */
+  function announceFailure(item: QueueItem): void {
+    overlay.addReply(item.requestedByNickname, `❌ Couldn't play **${item.song.title}**, skipping.`);
+  }
+
   /** Play the next song in the queue */
   async function playNext(): Promise<void> {
     if (isShuttingDown) return;
@@ -174,6 +179,7 @@ export async function startBot(): Promise<void> {
       const audioUrl = await search.getAudioUrl(next.song);
       if (!audioUrl) {
         logger.warn({ title: next.song.title }, 'Could not get audio URL, skipping');
+        announceFailure(next);
         queue.completeCurrent();
         setTimeout(() => playNext(), 100);
         return;
@@ -187,10 +193,17 @@ export async function startBot(): Promise<void> {
       db.recordUser(next.requestedBy, next.requestedBy, next.requestedByNickname);
     } catch (error) {
       logger.error({ error, title: next.song.title }, 'Failed to play song, skipping');
+      announceFailure(next);
       queue.completeCurrent();
       setTimeout(() => playNext(), 100);
     }
   }
+
+  // mpv couldn't play the stream; song-ended follows and moves on
+  player.on('song-failed', () => {
+    const current = queue.getCurrent();
+    if (current) announceFailure(current);
+  });
 
   // When song ends → play next
   player.on('song-ended', () => {

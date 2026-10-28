@@ -201,6 +201,7 @@ export class PlayerService extends EventEmitter {
           }
           if (event.reason === 'error') {
             logger.warn({ fileError: event.file_error, title: this.currentSong?.title }, 'mpv failed to play song');
+            this.emit('song-failed');
           } else {
             logger.debug({ reason: event.reason }, 'Song ended');
           }
