@@ -6,6 +6,10 @@ import { getLogger } from '../utils/logger.js';
 
 const execFileAsync = promisify(execFile);
 
+/** yt-dlp stderr when the configured cookie source can't be read at all */
+const COOKIE_LOAD_ERROR =
+  /cookies database|failed to load cookies|(unknown|unsupported) browser|unsupported keyring/i;
+
 interface YtDlpVideoInfo {
   id: string;
   title: string;
@@ -26,8 +30,11 @@ interface YtDlpVideoInfo {
 export class SearchService {
   private readonly ytDlpPath: string;
   private readonly maxDuration: number;
-  /** Auth args prepended to every yt-dlp call, so YouTube's bot check passes */
-  private readonly authArgs: string[];
+  /**
+   * Auth args prepended to every yt-dlp call, so YouTube's bot check passes.
+   * Cleared if the cookie source turns out to be unreadable.
+   */
+  private authArgs: string[];
 
   constructor(config: AppConfig) {
     this.ytDlpPath = config.ytDlpPath;
@@ -74,8 +81,7 @@ export class SearchService {
   /** Run a YouTube search and return the top results' metadata */
   private async searchResults(query: string, count = 5): Promise<YtDlpVideoInfo[]> {
     try {
-      const { stdout } = await execFileAsync(this.ytDlpPath, [
-        ...this.authArgs,
+      const stdout = await this.runYtDlp([
         `ytsearch${count}:${query}`,
         '--dump-json',
         '--no-playlist',
@@ -103,8 +109,7 @@ export class SearchService {
 
     try {
       // Try to get best audio stream URL
-      const { stdout } = await execFileAsync(this.ytDlpPath, [
-        ...this.authArgs,
+      const stdout = await this.runYtDlp([
         song.webpageUrl || song.url,
         '-f',
         'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
@@ -130,8 +135,7 @@ export class SearchService {
    */
   async getMetadata(url: string): Promise<Song | null> {
     try {
-      const { stdout } = await execFileAsync(this.ytDlpPath, [
-        ...this.authArgs,
+      const stdout = await this.runYtDlp([
         url,
         '--dump-json',
         '--no-playlist',
@@ -142,6 +146,29 @@ export class SearchService {
     } catch (error) {
       getLogger().error({ error, url }, 'Failed to get metadata');
       return null;
+    }
+  }
+
+  /**
+   * Run yt-dlp with the auth args. If the cookie source can't be loaded
+   * (e.g. the browser isn't installed), drop it and retry without cookies
+   * rather than failing every request.
+   */
+  private async runYtDlp(args: string[]): Promise<string> {
+    try {
+      const { stdout } = await execFileAsync(this.ytDlpPath, [...this.authArgs, ...args]);
+      return stdout;
+    } catch (error) {
+      const stderr = (error as { stderr?: string }).stderr ?? '';
+      if (this.authArgs.length === 0 || !COOKIE_LOAD_ERROR.test(stderr)) throw error;
+
+      getLogger().warn(
+        { authArgs: this.authArgs, stderr: stderr.trim() },
+        'Could not load YouTube cookies — continuing without them. Fix YTDLP_COOKIES_FROM_BROWSER / YTDLP_COOKIES_FILE in .env',
+      );
+      this.authArgs = [];
+      const { stdout } = await execFileAsync(this.ytDlpPath, args);
+      return stdout;
     }
   }
 
