@@ -6,6 +6,7 @@ import type { PlayerService } from './PlayerService.js';
 import type { QueueService } from './QueueService.js';
 import { OVERLAY_HTML } from '../overlay/page.js';
 import { CONSOLE_HTML } from '../overlay/console.js';
+import { displayTitle } from '../models/Song.js';
 import { getLogger } from '../utils/logger.js';
 
 /** A bot reply shown on the overlay */
@@ -167,14 +168,14 @@ export class OverlayService {
 
     return {
       now: current && {
-        title: current.song.title,
+        title: displayTitle(current.song.title),
         requestedBy: current.requestedByNickname,
         duration: current.song.duration,
         position: status?.position ?? 0,
         paused: status?.state === 'paused',
       },
       upNext: this.queue.getQueue().slice(0, MAX_UP_NEXT).map((item) => ({
-        title: item.song.title,
+        title: displayTitle(item.song.title),
         requestedBy: item.requestedByNickname,
       })),
       queueLength: this.queue.length,

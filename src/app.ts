@@ -1,5 +1,6 @@
 import type { AppConfig, QueueItem } from './types/index.js';
 import { loadConfig } from './config/index.js';
+import { displayTitle } from './models/Song.js';
 import { createLogger, getLogger } from './utils/logger.js';
 import {
   BridgeService,
@@ -155,7 +156,7 @@ export async function startBot(): Promise<void> {
 
   /** Tell viewers on the overlay that a request couldn't be played */
   function announceFailure(item: QueueItem): void {
-    overlay.addReply(item.requestedByNickname, `❌ Couldn't play **${item.song.title}**, skipping.`);
+    overlay.addReply(item.requestedByNickname, `❌ Couldn't play **${displayTitle(item.song.title)}**, skipping.`);
   }
 
   /** Play the next song in the queue */
@@ -209,7 +210,7 @@ export async function startBot(): Promise<void> {
   player.on('song-muted', async () => {
     const current = queue.getCurrent();
     if (!current) return;
-    overlay.addReply(current.requestedByNickname, `🔇 **${current.song.title}** is muted on YouTube, skipping.`);
+    overlay.addReply(current.requestedByNickname, `🔇 **${displayTitle(current.song.title)}** is muted on YouTube, skipping.`);
     await player.stop();
     queue.skipCurrent();
   });

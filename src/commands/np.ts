@@ -1,5 +1,6 @@
 import type { CommandHandler } from '../types/index.js';
 import { PlayerService, QueueService } from '../container.js';
+import { displayTitle } from '../models/Song.js';
 
 export const npCommand: CommandHandler = {
   name: 'np',
@@ -24,7 +25,7 @@ export const npCommand: CommandHandler = {
     let stateIcon = '▶️';
     if (status.state === 'paused') stateIcon = '⏸️';
 
-    let response = `${stateIcon} **Now Playing**: ${current.song.title}\n`;
+    let response = `${stateIcon} **Now Playing**: ${displayTitle(current.song.title)}\n`;
     response += `📝 Requested by: ${current.requestedByNickname}\n`;
     response += `⏱️ ${posMins}:${posSecs.toString().padStart(2, '0')} / ${mins}:${secs.toString().padStart(2, '0')}\n`;
 
