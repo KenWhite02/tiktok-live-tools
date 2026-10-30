@@ -4,6 +4,7 @@ import type { AppConfig } from '../types/index.js';
 import type { BridgeService } from './BridgeService.js';
 import type { PlayerService } from './PlayerService.js';
 import type { QueueService } from './QueueService.js';
+import type { ArtworkService } from './ArtworkService.js';
 import { OVERLAY_HTML } from '../overlay/page.js';
 import { CONSOLE_HTML } from '../overlay/console.js';
 import { displayTitle } from '../models/Song.js';
@@ -32,6 +33,7 @@ export class OverlayService {
   private readonly player: PlayerService;
   private readonly queue: QueueService;
   private readonly bridge: BridgeService;
+  private readonly artwork: ArtworkService;
   private server: Server | null = null;
   private replies: OverlayReply[] = [];
 
@@ -40,11 +42,13 @@ export class OverlayService {
     player: PlayerService,
     queue: QueueService,
     bridge: BridgeService,
+    artwork: ArtworkService,
   ) {
     this.port = config.overlayPort;
     this.player = player;
     this.queue = queue;
     this.bridge = bridge;
+    this.artwork = artwork;
   }
 
   get url(): string {
@@ -165,16 +169,20 @@ export class OverlayService {
   private async getState() {
     const current = this.queue.getCurrent();
     const status = current ? await this.player.getStatus() : null;
+    const upNext = this.queue.getQueue().slice(0, MAX_UP_NEXT);
+    // Look up the next song's art now so it's ready when that song starts
+    if (upNext[0]) this.artwork.get(upNext[0].song);
 
     return {
       now: current && {
         title: displayTitle(current.song.title),
+        artwork: this.artwork.get(current.song),
         requestedBy: current.requestedByNickname,
         duration: current.song.duration,
         position: status?.position ?? 0,
         paused: status?.state === 'paused',
       },
-      upNext: this.queue.getQueue().slice(0, MAX_UP_NEXT).map((item) => ({
+      upNext: upNext.map((item) => ({
         title: displayTitle(item.song.title),
         requestedBy: item.requestedByNickname,
       })),

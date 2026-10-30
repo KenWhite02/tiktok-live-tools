@@ -316,6 +316,8 @@ export class PlayerService extends EventEmitter {
         | { playlist_entry_id?: number }
         | undefined;
       this.currentEntryId = result?.playlist_entry_id ?? null;
+      // mpv keeps pause across files, so a song loaded after any pause would start paused
+      await this.rawCommand('set_property', 'pause', false);
       this.emit('song-start', song);
     } catch (error) {
       this.isLoadingSong = false;

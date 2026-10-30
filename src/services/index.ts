@@ -6,3 +6,4 @@ export { PlayerService } from './PlayerService.js';
 export { QueueService } from './QueueService.js';
 export { TikTokService } from './TikTokService.js';
 export { OverlayService } from './OverlayService.js';
+export { ArtworkService } from './ArtworkService.js';
