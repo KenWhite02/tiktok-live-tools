@@ -61,6 +61,16 @@ export const OVERLAY_HTML = `<!doctype html>
   .meta { display: flex; justify-content: space-between; gap: 0 0.6rem; color: var(--muted); font-size: 0.7rem; margin-top: 0.3rem; }
   .meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #now-time { flex-shrink: 0; }
+  .now-row { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+  .now-text { flex: 1; min-width: 0; }
+  #now-art {
+    width: 2.8rem;
+    height: 2.8rem;
+    flex-shrink: 0;
+    object-fit: cover;
+    border-radius: 0.35rem;
+    background: var(--line);
+  }
   .bar { height: 0.3rem; border-radius: 0.15rem; background: var(--line); margin-top: 0.45rem; overflow: hidden; }
   .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: width 1s linear; }
   #now-title {
@@ -102,8 +112,13 @@ export const OVERLAY_HTML = `<!doctype html>
 <body>
   <div class="card" id="now">
     <div class="label" id="now-label">Now playing</div>
-    <div id="now-title"></div>
-    <div class="meta"><span id="now-by"></span><span id="now-time"></span></div>
+    <div class="now-row">
+      <img class="hidden" id="now-art" alt="">
+      <div class="now-text">
+        <div id="now-title"></div>
+        <div class="meta"><span id="now-by"></span><span id="now-time"></span></div>
+      </div>
+    </div>
     <div class="bar"><div id="now-bar"></div></div>
   </div>
 
@@ -139,8 +154,27 @@ export const OVERLAY_HTML = `<!doctype html>
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   };
 
+  // Hide the art if the image can't be loaded
+  $('now-art').addEventListener('error', () => $('now-art').classList.add('hidden'));
+
+  /** Show the album art, only reloading it when the song's art changes */
+  function renderArt(src) {
+    const img = $('now-art');
+    if (img.dataset.src !== (src || '')) {
+      img.dataset.src = src || '';
+      if (src) {
+        img.src = src;
+        img.classList.remove('hidden');
+      } else {
+        img.removeAttribute('src');
+        img.classList.add('hidden');
+      }
+    }
+  }
+
   function render(state) {
     const now = state.now;
+    renderArt(now && now.artwork);
     if (now) {
       $('now-label').textContent = now.paused ? 'Paused' : 'Now playing';
       $('now-title').textContent = now.title;

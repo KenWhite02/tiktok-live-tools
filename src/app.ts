@@ -11,6 +11,7 @@ import {
   QueueService,
   TikTokService,
   OverlayService,
+  ArtworkService,
 } from './services/index.js';
 import {
   setBridgeService,
@@ -47,7 +48,8 @@ export async function startBot(): Promise<void> {
   const queue = new QueueService(config);
   const bridge = new BridgeService(config.wsHost, config.wsPort);
   const tiktok = new TikTokService(bridge);
-  const overlay = new OverlayService(config, player, queue, bridge);
+  const artwork = new ArtworkService();
+  const overlay = new OverlayService(config, player, queue, bridge, artwork);
 
   // Store in container for command handlers
   setBridgeService(bridge);
