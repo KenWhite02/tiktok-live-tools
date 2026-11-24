@@ -202,10 +202,45 @@ export async function startBot(): Promise<void> {
     }
   }
 
-  // mpv couldn't play the stream; song-ended follows and moves on
+  /**
+   * YouTube rejects some stream URLs (403) at random, and a freshly fetched
+   * URL for the same song usually plays — retry before giving up
+   */
+  const MAX_LOAD_RETRIES = 2;
+  const loadRetries = new WeakMap<QueueItem, number>();
+  let retryPending = false;
+
+  async function retryCurrent(): Promise<void> {
+    const current = queue.getCurrent();
+    if (!current || isShuttingDown) return;
+    const attempt = (loadRetries.get(current) ?? 0) + 1;
+    loadRetries.set(current, attempt);
+    logger.warn({ title: current.song.title, attempt }, 'Retrying song with a fresh stream URL');
+
+    try {
+      const audioUrl = await search.getAudioUrl(current.song);
+      if (!audioUrl) throw new Error('No audio URL on retry');
+      // A skip during the fetch makes this song no longer current
+      if (queue.getCurrent() !== current) return;
+      await player.loadSong(current.song, audioUrl);
+    } catch (error) {
+      logger.error({ error, title: current.song.title }, 'Retry failed, skipping');
+      if (queue.getCurrent() !== current) return;
+      announceFailure(current);
+      queue.completeCurrent();
+      setTimeout(() => playNext(), 100);
+    }
+  }
+
+  // mpv couldn't play the stream; song-ended follows and either retries or moves on
   player.on('song-failed', () => {
     const current = queue.getCurrent();
-    if (current) announceFailure(current);
+    if (!current) return;
+    if ((loadRetries.get(current) ?? 0) < MAX_LOAD_RETRIES) {
+      retryPending = true;
+      return;
+    }
+    announceFailure(current);
   });
 
   // The video's audio is muted on YouTube → skip it like !skip does
@@ -219,6 +254,11 @@ export async function startBot(): Promise<void> {
 
   // When song ends → play next
   player.on('song-ended', () => {
+    if (retryPending) {
+      retryPending = false;
+      retryCurrent().catch((err) => logger.error({ err }, 'Retry crashed'));
+      return;
+    }
     logger.debug('Song ended, playing next');
     queue.completeCurrent();
     setTimeout(() => playNext(), 500);
