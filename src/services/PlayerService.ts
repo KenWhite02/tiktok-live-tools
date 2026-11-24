@@ -24,6 +24,8 @@ const SILENCE_DB = -60;
 const SILENCE_SECONDS = 8;
 /** Silence that starts this close to the end is just the song's fade-out */
 const SILENCE_END_MARGIN = 15;
+/** How long after a load mpv may sit idle before the song counts as ended */
+const LOAD_WATCHDOG_MS = 15_000;
 
 /**
  * Controls an mpv instance via JSON IPC protocol.
@@ -44,6 +46,9 @@ export class PlayerService extends EventEmitter {
   private isLoadingSong = false;
   /** mpv playlist entry of the current song, to tell its end-file apart from a replaced song's */
   private currentEntryId: number | null = null;
+  /** end-file events that arrived before loadfile replied with the new entry's id */
+  private earlyEndFiles = new Map<number, MpvEvent>();
+  private loadWatchdog: NodeJS.Timeout | null = null;
   /** Whether song-muted already fired for the current song */
   private mutedReported = false;
   constructor(config: AppConfig) {
@@ -205,23 +210,23 @@ export class PlayerService extends EventEmitter {
         case 'property-change':
           this.handlePropertyChange(event.name as string, event.data);
           break;
-        case 'end-file':
-          // Loading a song over another one ends the old entry; that isn't
-          // the current song ending
-          if (event.playlist_entry_id !== this.currentEntryId) {
-            logger.debug({ entryId: event.playlist_entry_id }, 'Ignoring end of replaced song');
+        case 'end-file': {
+          const entryId = event.playlist_entry_id as number | undefined;
+          // A load that fails fast can end before loadfile replies with its id;
+          // keep it so loadSong can match it once the id is known
+          if (this.isLoadingSong && this.currentEntryId === null && entryId !== undefined) {
+            this.earlyEndFiles.set(entryId, event);
             break;
           }
-          if (event.reason === 'error') {
-            logger.warn({ fileError: event.file_error, title: this.currentSong?.title }, 'mpv failed to play song');
-            this.emit('song-failed');
-          } else {
-            logger.debug({ reason: event.reason }, 'Song ended');
+          // Loading a song over another one ends the old entry; that isn't
+          // the current song ending
+          if (entryId !== this.currentEntryId) {
+            logger.debug({ entryId }, 'Ignoring end of replaced song');
+            break;
           }
-          this.currentSong = null;
-          this.isLoadingSong = false;
-          this.emit('song-ended');
+          this.finishCurrentSong(event);
           break;
+        }
         case 'file-loaded':
           logger.debug('File loaded in mpv');
           // If we had a pending load that got overwritten, restore it
@@ -239,6 +244,46 @@ export class PlayerService extends EventEmitter {
       }
       this.emit('mpv-event', event);
     }
+  }
+
+  /** The current song's entry ended in mpv: report it so the queue moves on */
+  private finishCurrentSong(event: MpvEvent): void {
+    const logger = getLogger();
+    if (event.reason === 'error') {
+      logger.warn({ fileError: event.file_error, title: this.currentSong?.title }, 'mpv failed to play song');
+      this.emit('song-failed');
+    } else {
+      logger.debug({ reason: event.reason }, 'Song ended');
+    }
+    this.clearLoadWatchdog();
+    this.currentSong = null;
+    this.isLoadingSong = false;
+    this.emit('song-ended');
+  }
+
+  private clearLoadWatchdog(): void {
+    if (this.loadWatchdog) clearTimeout(this.loadWatchdog);
+    this.loadWatchdog = null;
+  }
+
+  /**
+   * Safety net: if mpv is idle well after a load while we still think the song
+   * is playing, its end-file was missed — end the song so the queue isn't stuck
+   */
+  private startLoadWatchdog(song: Song): void {
+    this.clearLoadWatchdog();
+    this.loadWatchdog = setTimeout(async () => {
+      this.loadWatchdog = null;
+      if (this.currentSong !== song) return;
+      try {
+        const idle = await this.rawCommand('get_property', 'idle-active');
+        if (idle !== true || this.currentSong !== song) return;
+        getLogger().warn({ title: song.title }, 'mpv idle after loading song, moving on');
+        this.finishCurrentSong({ event: 'end-file', reason: 'error', file_error: 'idle after load' });
+      } catch (error) {
+        getLogger().error({ error }, 'Load watchdog check failed');
+      }
+    }, LOAD_WATCHDOG_MS);
   }
 
   /** Handle property change events from mpv */
@@ -312,13 +357,22 @@ export class PlayerService extends EventEmitter {
       this.isLoadingSong = true;
       // Until mpv replies, any end-file belongs to the song being replaced
       this.currentEntryId = null;
+      this.earlyEndFiles.clear();
       const result = (await this.rawCommand('loadfile', audioUrl, 'replace')) as
         | { playlist_entry_id?: number }
         | undefined;
       this.currentEntryId = result?.playlist_entry_id ?? null;
+      const earlyEnd = this.currentEntryId !== null ? this.earlyEndFiles.get(this.currentEntryId) : undefined;
+      this.earlyEndFiles.clear();
       // mpv keeps pause across files, so a song loaded after any pause would start paused
       await this.rawCommand('set_property', 'pause', false);
       this.emit('song-start', song);
+      if (earlyEnd) {
+        // The new song already ended (usually a failed stream) before mpv replied
+        this.finishCurrentSong(earlyEnd);
+      } else {
+        this.startLoadWatchdog(song);
+      }
     } catch (error) {
       this.isLoadingSong = false;
       this.currentSong = null;
